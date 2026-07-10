@@ -1,0 +1,481 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --wood-dark:#5C3A21;
+    --wood:#A66A3C;
+    --wood-light:#C98F55;
+    --felt:#F1E4C8;
+    --felt-line:#3D2B1A;
+    --coin-black:#221F1D;
+    --coin-white:#F7F3E9;
+    --queen:#A6342E;
+    --queen-dark:#7C2521;
+    --ink:#2B2118;
+    --ink-soft:#6B5A47;
+  }
+  *{box-sizing:border-box;}
+  .carrom-app{
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    background:linear-gradient(160deg, var(--wood-dark), var(--wood) 55%, var(--wood-light));
+    border-radius:20px;
+    padding:22px;
+    max-width:520px;
+    margin:0 auto;
+    box-shadow: inset 0 0 0 6px rgba(0,0,0,0.15), 0 20px 50px rgba(60,30,10,0.25);
+  }
+  .header{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:16px; padding:0 4px;
+  }
+  .header h1{
+    font-family:'Fraunces',serif; font-weight:700; font-size:26px;
+    color:#FBF2DD; letter-spacing:-0.01em; margin:0;
+  }
+  .header p{
+    font-family:'JetBrains Mono',monospace; font-size:11px;
+    color:rgba(251,242,221,0.75); margin:0;
+  }
+  .tabs{ display:flex; gap:6px; margin-bottom:14px; }
+  .tab-btn{
+    flex:1; font-family:'Fraunces',serif; font-weight:600; font-size:14px;
+    padding:9px 0; border-radius:8px; border:1.5px solid rgba(251,242,221,0.35);
+    background:rgba(0,0,0,0.12); color:rgba(251,242,221,0.75); cursor:pointer;
+  }
+  .tab-btn.active{ background:var(--queen); color:#FBF2DD; border-color:var(--queen); }
+
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  .board-wrap{
+    background:var(--felt); border-radius:14px; padding:16px;
+    box-shadow: inset 0 0 0 3px var(--felt-line), inset 0 0 30px rgba(61,43,26,0.15);
+  }
+
+  .field-row{ display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .field-row label{
+    font-size:11px; font-weight:600; color:var(--ink-soft);
+    text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap;
+  }
+  .field-row input, .field-row select{
+    font-family:'Inter',sans-serif; font-size:14px; padding:8px 10px;
+    border-radius:8px; border:1.5px solid rgba(61,43,26,0.25); background:#fff; color:var(--ink);
+    flex:1; min-width:110px;
+  }
+  .field-row input:focus, .field-row select:focus{ outline:2px solid var(--queen); outline-offset:1px; }
+
+  svg.board{ display:block; width:100%; height:auto; touch-action:none; cursor:crosshair; }
+
+  .counter-row{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-top:14px; gap:10px; flex-wrap:wrap;
+  }
+  .counter-card{
+    background:#fff; border-radius:10px; padding:10px 16px;
+    box-shadow: inset 0 0 0 1.5px rgba(61,43,26,0.15); text-align:center;
+  }
+  .counter-card .num{ font-family:'Fraunces',serif; font-weight:700; font-size:26px; color:var(--queen-dark); }
+  .counter-card .lbl{ font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--ink-soft); text-transform:uppercase; }
+
+  .primary-btn{
+    font-family:'Fraunces',serif; font-weight:600; font-size:14px;
+    padding:11px 18px; border-radius:9px; border:none;
+    background:var(--queen); color:#FBF2DD; cursor:pointer;
+  }
+  .primary-btn:hover{ background:var(--queen-dark); }
+  .primary-btn:disabled{ opacity:0.45; cursor:not-allowed; }
+
+  .ghost-btn{
+    font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
+    padding:9px 12px; border-radius:8px; border:1.5px solid rgba(61,43,26,0.25);
+    background:#fff; color:var(--ink); cursor:pointer;
+  }
+  .ghost-btn.danger{ color:var(--queen-dark); border-color:rgba(166,52,46,0.35); }
+  .ghost-btn:hover{ background:var(--felt); }
+
+  .report-actions{ display:flex; gap:10px; margin-top:14px; }
+  .report-actions .ghost-btn{ flex:1; }
+
+  .hint{
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--ink-soft);
+    text-align:center; margin-top:10px;
+  }
+
+  .empty-note{
+    text-align:center; padding:30px 10px; color:var(--ink-soft);
+    font-family:'JetBrains Mono',monospace; font-size:12px;
+  }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:#1C1C1E; color:#fff; padding:9px 18px; border-radius:20px;
+    font-size:13px; font-family:'Inter',sans-serif; opacity:0; transition:opacity .2s, transform .2s;
+    pointer-events:none; z-index:999; white-space:nowrap;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+
+<div class="carrom-app" id="app">
+  <div class="header">
+    <div>
+      <h1>Carrom Log</h1>
+      <p>drag to log, tab to review</p>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-btn-1" onclick="switchTab(1)">Current match</button>
+    <button class="tab-btn" id="tab-btn-2" onclick="switchTab(2)">Report</button>
+  </div>
+
+  <div class="panel active" id="panel-1">
+    <div class="board-wrap">
+      <div class="field-row">
+        <label for="game-no">Game no</label>
+        <input type="text" id="game-no" placeholder="e.g. 1" inputmode="numeric">
+        <label for="mistake-type">Mistake</label>
+        <select id="mistake-type">
+          <option value="weak_strike">Weak strike</option>
+          <option value="wrong_angle">Wrong angle</option>
+          <option value="foul">Foul</option>
+          <option value="overforce">Overused force</option>
+          <option value="queen_exposed">Left queen exposed</option>
+          <option value="missed_easy">Missed easy pocket</option>
+          <option value="poor_break">Poor break shot</option>
+          <option value="bad_position">Bad positioning</option>
+        </select>
+      </div>
+      <svg class="board" id="live-board" viewBox="0 0 300 300"></svg>
+      <div class="hint">drag from mistake start to where it ended</div>
+      <div class="counter-row">
+        <div class="counter-card">
+          <div class="num" id="mistake-count">0</div>
+          <div class="lbl">mistakes this game</div>
+        </div>
+        <button class="primary-btn" id="match-done-btn" onclick="finishMatch()">Match done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-2">
+    <div class="board-wrap">
+      <svg class="board" id="report-board" viewBox="0 0 300 300"></svg>
+      <div class="hint" id="report-hint">arrows = repeated mistake patterns across all games</div>
+      <div class="report-actions">
+        <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importData(this)">
+        <button class="ghost-btn" onclick="document.getElementById('import-file').click()">Import</button>
+        <button class="ghost-btn" onclick="exportData()">Export</button>
+        <button class="ghost-btn danger" onclick="clearAllData()">Clear all</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var STORAGE_KEY = 'carrom-data';
+  var GRID = 8;
+  var PAD = 20, SIZE = 260;
+
+  var data = { current: { gameNo: '', mistakes: [] }, history: [] };
+
+  function toast(msg){
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(function(){ el.classList.remove('show'); }, 1800);
+  }
+
+  async function load(){
+    try{
+      var res = await window.storage.get(STORAGE_KEY, false);
+      if(res && res.value){
+        var parsed = JSON.parse(res.value);
+        data.current = parsed.current || { gameNo:'', mistakes:[] };
+        data.history = parsed.history || [];
+      }
+    }catch(e){ /* no data yet */ }
+  }
+
+  async function save(){
+    try{
+      await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
+    }catch(e){
+      toast('Could not save — try again');
+    }
+  }
+
+  function ns(tag){ return document.createElementNS('http://www.w3.org/2000/svg', tag); }
+
+  function drawBoardFrame(svg){
+    svg.innerHTML = '';
+    var border = ns('rect');
+    border.setAttribute('x', PAD); border.setAttribute('y', PAD);
+    border.setAttribute('width', SIZE); border.setAttribute('height', SIZE);
+    border.setAttribute('fill', 'none');
+    border.setAttribute('stroke', 'var(--felt-line)');
+    border.setAttribute('stroke-width', '2');
+    svg.appendChild(border);
+
+    var inner = ns('rect');
+    inner.setAttribute('x', PAD+14); inner.setAttribute('y', PAD+14);
+    inner.setAttribute('width', SIZE-28); inner.setAttribute('height', SIZE-28);
+    inner.setAttribute('fill', 'none');
+    inner.setAttribute('stroke', 'rgba(61,43,26,0.35)');
+    inner.setAttribute('stroke-width', '1');
+    svg.appendChild(inner);
+
+    var center = ns('circle');
+    center.setAttribute('cx', PAD+SIZE/2); center.setAttribute('cy', PAD+SIZE/2);
+    center.setAttribute('r', 26);
+    center.setAttribute('fill', 'none');
+    center.setAttribute('stroke', 'rgba(61,43,26,0.3)');
+    center.setAttribute('stroke-width', '1');
+    svg.appendChild(center);
+
+    var corners = [[PAD,PAD],[PAD+SIZE,PAD],[PAD,PAD+SIZE],[PAD+SIZE,PAD+SIZE]];
+    corners.forEach(function(c){
+      var circ = ns('circle');
+      circ.setAttribute('cx', c[0]); circ.setAttribute('cy', c[1]);
+      circ.setAttribute('r', 9);
+      circ.setAttribute('fill', 'var(--felt-line)');
+      svg.appendChild(circ);
+    });
+
+    var defs = ns('defs');
+    var marker = ns('marker');
+    marker.setAttribute('id', 'arrowhead-' + svg.id);
+    marker.setAttribute('viewBox', '0 0 10 10');
+    marker.setAttribute('refX', '8'); marker.setAttribute('refY', '5');
+    marker.setAttribute('markerWidth', '6'); marker.setAttribute('markerHeight', '6');
+    marker.setAttribute('orient', 'auto-start-reverse');
+    var path = ns('path');
+    path.setAttribute('d', 'M1 1L9 5L1 9Z');
+    path.setAttribute('fill', 'var(--queen)');
+    marker.appendChild(path);
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+  }
+
+  // ---------- TAB 1: live board drag capture ----------
+  var liveBoard = document.getElementById('live-board');
+  var dragStart = null;
+  var liveLine = null;
+
+  function toBoardCoords(evt){
+    var rect = liveBoard.getBoundingClientRect();
+    var scaleX = 300 / rect.width, scaleY = 300 / rect.height;
+    var px = (evt.clientX - rect.left) * scaleX;
+    var py = (evt.clientY - rect.top) * scaleY;
+    px = Math.max(PAD, Math.min(PAD+SIZE, px));
+    py = Math.max(PAD, Math.min(PAD+SIZE, py));
+    return { x: px, y: py, nx: (px-PAD)/SIZE, ny: (py-PAD)/SIZE };
+  }
+
+  function onPointerDown(evt){
+    liveBoard.setPointerCapture(evt.pointerId);
+    dragStart = toBoardCoords(evt);
+    liveLine = ns('line');
+    liveLine.setAttribute('stroke', 'var(--queen)');
+    liveLine.setAttribute('stroke-width', '3');
+    liveLine.setAttribute('stroke-linecap', 'round');
+    liveLine.setAttribute('x1', dragStart.x); liveLine.setAttribute('y1', dragStart.y);
+    liveLine.setAttribute('x2', dragStart.x); liveLine.setAttribute('y2', dragStart.y);
+    liveBoard.appendChild(liveLine);
+  }
+  function onPointerMove(evt){
+    if(!dragStart || !liveLine) return;
+    var p = toBoardCoords(evt);
+    liveLine.setAttribute('x2', p.x); liveLine.setAttribute('y2', p.y);
+  }
+  async function onPointerUp(evt){
+    if(!dragStart) return;
+    var end = toBoardCoords(evt);
+    var dist = Math.hypot(end.x - dragStart.x, end.y - dragStart.y);
+    if(dist > 8){
+      var type = document.getElementById('mistake-type').value;
+      data.current.mistakes.push({
+        start: { x: dragStart.nx, y: dragStart.ny },
+        end: { x: end.nx, y: end.ny },
+        type: type
+      });
+      await save();
+      updateCounter();
+      toast('Mistake logged');
+    }
+    dragStart = null; liveLine = null;
+    drawBoardFrame(liveBoard);
+  }
+
+  liveBoard.addEventListener('pointerdown', onPointerDown);
+  liveBoard.addEventListener('pointermove', onPointerMove);
+  liveBoard.addEventListener('pointerup', onPointerUp);
+  liveBoard.addEventListener('pointercancel', function(){ dragStart=null; liveLine=null; drawBoardFrame(liveBoard); });
+
+  function updateCounter(){
+    document.getElementById('mistake-count').textContent = data.current.mistakes.length;
+  }
+
+  async function finishMatch(){
+    if(data.current.mistakes.length === 0){
+      toast('No mistakes logged yet');
+      return;
+    }
+    var gameNo = document.getElementById('game-no').value.trim() || ('Game ' + (data.history.length + 1));
+    data.history.push({
+      gameNo: gameNo,
+      mistakes: data.current.mistakes,
+      count: data.current.mistakes.length
+    });
+    var nextNo = '';
+    var asNum = parseInt(gameNo, 10);
+    if(!isNaN(asNum) && String(asNum) === gameNo) nextNo = String(asNum + 1);
+    data.current = { gameNo: nextNo, mistakes: [] };
+    document.getElementById('game-no').value = nextNo;
+    await save();
+    updateCounter();
+    drawBoardFrame(liveBoard);
+    toast('Match saved to report');
+    renderReport();
+  }
+  window.finishMatch = finishMatch;
+
+  // ---------- TAB 2: aggregated report ----------
+  function cellIndex(n){
+    var i = Math.floor(n * GRID);
+    return Math.max(0, Math.min(GRID - 1, i));
+  }
+  function cellCenter(idx){
+    return (idx + 0.5) / GRID;
+  }
+
+  function renderReport(){
+    var svg = document.getElementById('report-board');
+    drawBoardFrame(svg);
+
+    var groups = {};
+    data.history.forEach(function(game){
+      game.mistakes.forEach(function(m){
+        var sx = cellIndex(m.start.x), sy = cellIndex(m.start.y);
+        var ex = cellIndex(m.end.x), ey = cellIndex(m.end.y);
+        var key = sx+','+sy+'-'+ex+','+ey;
+        if(!groups[key]) groups[key] = { sx:sx, sy:sy, ex:ex, ey:ey, count:0 };
+        groups[key].count++;
+      });
+    });
+
+    var keys = Object.keys(groups);
+    if(keys.length === 0){
+      var note = document.getElementById('report-hint');
+      note.textContent = 'no finished games yet — play a match and hit "Match done"';
+      return;
+    } else {
+      document.getElementById('report-hint').textContent = 'arrows = repeated mistake patterns across all games';
+    }
+
+    var maxCount = Math.max.apply(null, keys.map(function(k){ return groups[k].count; }));
+
+    keys.forEach(function(k){
+      var g = groups[k];
+      var x1 = PAD + cellCenter(g.sx) * SIZE;
+      var y1 = PAD + cellCenter(g.sy) * SIZE;
+      var x2 = PAD + cellCenter(g.ex) * SIZE;
+      var y2 = PAD + cellCenter(g.ey) * SIZE;
+
+      var line = ns('line');
+      var w = 1.5 + 3.5 * (g.count / maxCount);
+      line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+      line.setAttribute('stroke', 'var(--queen)');
+      line.setAttribute('stroke-width', w);
+      line.setAttribute('stroke-linecap', 'round');
+      line.setAttribute('opacity', 0.55 + 0.45*(g.count/maxCount));
+      line.setAttribute('marker-end', 'url(#arrowhead-report-board)');
+      svg.appendChild(line);
+
+      var mx = x1 + (x2-x1)*0.7, my = y1 + (y2-y1)*0.7;
+      var labelBg = ns('circle');
+      labelBg.setAttribute('cx', mx); labelBg.setAttribute('cy', my);
+      labelBg.setAttribute('r', 9);
+      labelBg.setAttribute('fill', 'var(--felt)');
+      labelBg.setAttribute('stroke', 'var(--queen)');
+      labelBg.setAttribute('stroke-width', '1');
+      svg.appendChild(labelBg);
+
+      var label = ns('text');
+      label.setAttribute('x', mx); label.setAttribute('y', my+3.5);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('font-family', 'JetBrains Mono, monospace');
+      label.setAttribute('font-size', '10');
+      label.setAttribute('font-weight', '600');
+      label.setAttribute('fill', 'var(--queen-dark)');
+      label.textContent = g.count;
+      svg.appendChild(label);
+    });
+  }
+
+  // ---------- tabs ----------
+  window.switchTab = function(n){
+    document.getElementById('panel-1').classList.toggle('active', n===1);
+    document.getElementById('panel-2').classList.toggle('active', n===2);
+    document.getElementById('tab-btn-1').classList.toggle('active', n===1);
+    document.getElementById('tab-btn-2').classList.toggle('active', n===2);
+    if(n===2) renderReport();
+  };
+
+  // ---------- import / export / clear ----------
+  window.exportData = function(){
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'carrom_log_backup.json'; a.click();
+    URL.revokeObjectURL(url);
+    toast('Backup exported');
+  };
+
+  window.importData = function(input){
+    var file = input.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = async function(e){
+      try{
+        var parsed = JSON.parse(e.target.result);
+        data.current = parsed.current || { gameNo:'', mistakes:[] };
+        data.history = parsed.history || [];
+        await save();
+        document.getElementById('game-no').value = data.current.gameNo || '';
+        updateCounter();
+        drawBoardFrame(liveBoard);
+        renderReport();
+        toast('Data imported');
+      }catch(err){
+        toast('Import failed — check the file');
+      }
+    };
+    reader.readAsText(file);
+    input.value = '';
+  };
+
+  window.clearAllData = async function(){
+    if(!confirm('Delete all games and mistakes permanently?')) return;
+    data = { current: { gameNo:'', mistakes:[] }, history: [] };
+    await save();
+    document.getElementById('game-no').value = '';
+    updateCounter();
+    drawBoardFrame(liveBoard);
+    renderReport();
+    toast('All data cleared');
+  };
+
+  // ---------- init ----------
+  (async function init(){
+    drawBoardFrame(liveBoard);
+    drawBoardFrame(document.getElementById('report-board'));
+    await load();
+    document.getElementById('game-no').value = data.current.gameNo || '';
+    updateCounter();
+  })();
+})();
+</script>
