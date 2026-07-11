@@ -62,7 +62,13 @@
   }
   .field-row input:focus, .field-row select:focus{ outline:2px solid var(--queen); outline-offset:1px; }
 
-  svg.board{ display:block; width:100%; height:auto; touch-action:none; cursor:crosshair; }
+  svg.board{ display:block; width:100%; height:auto; touch-action:manipulation; cursor:pointer; }
+
+  .path-actions{ display:flex; align-items:center; gap:10px; justify-content:center; margin-top:10px; flex-wrap:wrap; }
+  .path-count{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink-soft); }
+  .path-actions .ghost-btn{ padding:6px 10px; font-size:11.5px; }
+  .path-actions .ghost-btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .primary-btn:disabled{ opacity:0.4; cursor:not-allowed; }
 
   .counter-row{ display:flex; justify-content:space-between; align-items:center; margin-top:14px; gap:10px; flex-wrap:wrap; }
   .counter-card{ background:#fff; border-radius:10px; padding:10px 16px; box-shadow: inset 0 0 0 1.5px rgba(61,43,26,0.15); text-align:center; }
@@ -81,10 +87,14 @@
 
   .hint{ font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:10px; }
 
+  .reason-group{ display:flex; gap:16px; justify-content:center; margin-top:14px; flex-wrap:wrap; }
+  .reason-group label{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink); cursor:pointer; font-family:'Inter',sans-serif; font-weight:500; }
+  .reason-group input[type=radio]{ accent-color:var(--queen); width:15px; height:15px; margin:0; }
+
   .type-summary{ margin-top:20px; }
   .type-summary h3{ font-family:'Fraunces',serif; font-size:14px; margin:0 0 10px 0; color:var(--felt-line); }
   .bar-row{ display:flex; align-items:center; gap:8px; margin-bottom:7px; }
-  .bar-row .bar-label{ font-size:11.5px; color:var(--ink); width:120px; flex-shrink:0; }
+  .bar-row .bar-label{ font-size:11px; color:var(--ink); width:150px; flex-shrink:0; line-height:1.3; }
   .bar-track{ flex:1; height:10px; background:rgba(61,43,26,0.1); border-radius:5px; overflow:hidden; }
   .bar-fill{ height:100%; border-radius:5px; }
   .bar-row .bar-count{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink-soft); width:20px; text-align:right; }
@@ -135,26 +145,40 @@
       <div class="field-row">
         <label for="game-no">Game no</label>
         <input type="text" id="game-no" placeholder="e.g. 1" inputmode="numeric">
-        <label for="mistake-type">Mistake</label>
+        <label for="mistake-type">Shot type</label>
         <select id="mistake-type">
-          <option value="weak_strike">Weak strike</option>
-          <option value="wrong_angle">Wrong angle</option>
-          <option value="foul">Foul</option>
-          <option value="overforce">Overused force</option>
-          <option value="queen_exposed">Left queen exposed</option>
-          <option value="missed_easy">Missed easy pocket</option>
-          <option value="poor_break">Poor break shot</option>
-          <option value="bad_position">Bad positioning</option>
+          <option value="straight">Straight</option>
+          <option value="cut_shot">Cut Shot</option>
+          <option value="punch_shot">Punch Shot</option>
+          <option value="push_shot">Push Shot</option>
+          <option value="thumb_shot">Thumb Shot</option>
+          <option value="scissor_shot">Scissor Shot</option>
+          <option value="touch_shot">Touch Shot</option>
+          <option value="touch_and_cut_shot">Touch &amp; Cut Shot</option>
+          <option value="power_shot">Power Shot</option>
         </select>
       </div>
       <svg class="board" id="live-board" viewBox="0 0 300 300"></svg>
-      <div class="hint">drag from mistake start to where it ended</div>
+      <div class="hint">tap points on the board: start → bounce (if any) → end</div>
+      <div class="path-actions">
+        <span class="path-count" id="path-point-count">0 points</span>
+        <button class="ghost-btn" id="undo-point-btn" onclick="undoPoint()" disabled>Undo point</button>
+        <button class="ghost-btn" id="clear-path-btn" onclick="clearPath()" disabled>Clear</button>
+      </div>
+      <div class="reason-group" id="reason-group">
+        <label><input type="radio" name="reason" value="angle_wrong">Angle wrong</label>
+        <label><input type="radio" name="reason" value="over_speed">Over speed</label>
+        <label><input type="radio" name="reason" value="low_speed">Low speed</label>
+      </div>
       <div class="counter-row">
         <div class="counter-card">
           <div class="num" id="mistake-count">0</div>
           <div class="lbl">mistakes this game</div>
         </div>
-        <button class="primary-btn" id="match-done-btn" onclick="finishMatch()">Match done</button>
+        <button class="primary-btn" id="save-shot-btn" onclick="saveShot()" disabled>Save shot</button>
+      </div>
+      <div class="counter-row" style="margin-top:8px;">
+        <button class="primary-btn" id="match-done-btn" onclick="finishMatch()" style="width:100%;">Match done</button>
       </div>
     </div>
   </div>
@@ -194,16 +218,20 @@
   var PAD = 20, SIZE = 260;
   var CX = PAD + SIZE/2, CY = PAD + SIZE/2;
 
-  var MISTAKE_TYPES = [
-    {key:'weak_strike', label:'Weak strike', color:'#A66A3C'},
-    {key:'wrong_angle', label:'Wrong angle', color:'#221F1D'},
-    {key:'foul', label:'Foul', color:'#A6342E'},
-    {key:'overforce', label:'Overused force', color:'#C98F55'},
-    {key:'queen_exposed', label:'Left queen exposed', color:'#7C2521'},
-    {key:'missed_easy', label:'Missed easy pocket', color:'#3D2B1A'},
-    {key:'poor_break', label:'Poor break shot', color:'#5C3A21'},
-    {key:'bad_position', label:'Bad positioning', color:'#6B5A47'}
+  var SHOT_TYPES = [
+    {key:'straight', label:'Straight', color:'#A66A3C'},
+    {key:'cut_shot', label:'Cut Shot', color:'#221F1D'},
+    {key:'punch_shot', label:'Punch Shot', color:'#A6342E'},
+    {key:'push_shot', label:'Push Shot', color:'#C98F55'},
+    {key:'thumb_shot', label:'Thumb Shot', color:'#7C2521'},
+    {key:'scissor_shot', label:'Scissor Shot', color:'#3D2B1A'},
+    {key:'touch_shot', label:'Touch Shot', color:'#5C3A21'},
+    {key:'touch_and_cut_shot', label:'Touch & Cut Shot', color:'#6B5A47'},
+    {key:'power_shot', label:'Power Shot', color:'#8B4A42'}
   ];
+
+  function reasonGroupKey(raw){ return raw === 'angle_wrong' ? 'angle_wrong' : 'speed_issue'; }
+  function reasonGroupLabel(key){ return key === 'angle_wrong' ? 'Angle wrong' : 'Speed issue'; }
 
   var data = { current: { gameNo: '', mistakes: [] }, history: [] };
 
@@ -391,60 +419,89 @@
     svg.appendChild(centerDot);
   }
 
-  // ---------- TAB 1: live board drag capture ----------
+  // ---------- TAB 1: tap-to-place waypoints (immune to touch lift/fragmentation bugs) ----------
   var liveBoard = document.getElementById('live-board');
-  var dragStart = null;
-  var liveLine = null;
+  var pathPoints = [];
 
-  function toBoardCoords(evt){
+  function toBoardCoords(clientX, clientY){
     var rect = liveBoard.getBoundingClientRect();
     var scaleX = 300 / rect.width, scaleY = 300 / rect.height;
-    var px = (evt.clientX - rect.left) * scaleX;
-    var py = (evt.clientY - rect.top) * scaleY;
+    var px = (clientX - rect.left) * scaleX;
+    var py = (clientY - rect.top) * scaleY;
     px = Math.max(PAD, Math.min(PAD+SIZE, px));
     py = Math.max(PAD, Math.min(PAD+SIZE, py));
     return { x: px, y: py, nx: (px-PAD)/SIZE, ny: (py-PAD)/SIZE };
   }
 
-  function onPointerDown(evt){
-    liveBoard.setPointerCapture(evt.pointerId);
-    dragStart = toBoardCoords(evt);
-    liveLine = ns('line');
-    liveLine.setAttribute('stroke', 'var(--queen)');
-    liveLine.setAttribute('stroke-width', '3');
-    liveLine.setAttribute('stroke-linecap', 'round');
-    liveLine.setAttribute('x1', dragStart.x); liveLine.setAttribute('y1', dragStart.y);
-    liveLine.setAttribute('x2', dragStart.x); liveLine.setAttribute('y2', dragStart.y);
-    liveBoard.appendChild(liveLine);
-  }
-  function onPointerMove(evt){
-    if(!dragStart || !liveLine) return;
-    var p = toBoardCoords(evt);
-    liveLine.setAttribute('x2', p.x); liveLine.setAttribute('y2', p.y);
-  }
-  async function onPointerUp(evt){
-    if(!dragStart) return;
-    var end = toBoardCoords(evt);
-    var dist = Math.hypot(end.x - dragStart.x, end.y - dragStart.y);
-    if(dist > 8){
-      var type = document.getElementById('mistake-type').value;
-      data.current.mistakes.push({
-        start: { x: dragStart.nx, y: dragStart.ny },
-        end: { x: end.nx, y: end.ny },
-        type: type
-      });
-      await save();
-      updateCounter();
-      toast('Mistake logged');
-    }
-    dragStart = null; liveLine = null;
+  function updatePathVisual(){
     drawBoardFrame(liveBoard);
+
+    if(pathPoints.length){
+      var poly = ns('polyline');
+      poly.setAttribute('points', pathPoints.map(function(p){ return p.x+','+p.y; }).join(' '));
+      poly.setAttribute('fill', 'none');
+      poly.setAttribute('stroke', 'var(--queen)');
+      poly.setAttribute('stroke-width', '3');
+      poly.setAttribute('stroke-linecap', 'round');
+      poly.setAttribute('stroke-linejoin', 'round');
+      liveBoard.appendChild(poly);
+
+      pathPoints.forEach(function(p, i){
+        var isFirst = i === 0, isLast = i === pathPoints.length-1;
+        var dot = ns('circle');
+        dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
+        dot.setAttribute('r', (isFirst || isLast) ? 7 : 5);
+        dot.setAttribute('fill', isFirst ? '#2E7D46' : (isLast ? 'var(--queen)' : '#fff'));
+        dot.setAttribute('stroke', 'var(--felt-line)');
+        dot.setAttribute('stroke-width', '1.5');
+        liveBoard.appendChild(dot);
+      });
+    }
+
+    var count = pathPoints.length;
+    document.getElementById('path-point-count').textContent = count + (count === 1 ? ' point' : ' points');
+    document.getElementById('undo-point-btn').disabled = count === 0;
+    document.getElementById('clear-path-btn').disabled = count === 0;
+    document.getElementById('save-shot-btn').disabled = count < 2;
   }
 
-  liveBoard.addEventListener('pointerdown', onPointerDown);
-  liveBoard.addEventListener('pointermove', onPointerMove);
-  liveBoard.addEventListener('pointerup', onPointerUp);
-  liveBoard.addEventListener('pointercancel', function(){ dragStart=null; liveLine=null; drawBoardFrame(liveBoard); });
+  liveBoard.addEventListener('click', function(evt){
+    var p = toBoardCoords(evt.clientX, evt.clientY);
+    pathPoints.push(p);
+    updatePathVisual();
+  });
+
+  window.undoPoint = function(){
+    pathPoints.pop();
+    updatePathVisual();
+  };
+
+  window.clearPath = function(){
+    pathPoints = [];
+    updatePathVisual();
+  };
+
+  window.saveShot = async function(){
+    if(pathPoints.length < 2){ toast('Add at least 2 points'); return; }
+    var reasonInput = document.querySelector('input[name="reason"]:checked');
+    if(!reasonInput){ toast('Pick a reason before saving'); return; }
+
+    var type = document.getElementById('mistake-type').value;
+    var normPath = pathPoints.map(function(p){ return { x: p.nx, y: p.ny }; });
+    data.current.mistakes.push({
+      path: normPath,
+      start: normPath[0],
+      end: normPath[normPath.length-1],
+      type: type,
+      reason: reasonGroupKey(reasonInput.value)
+    });
+    await save();
+    updateCounter();
+    document.querySelectorAll('input[name="reason"]').forEach(function(r){ r.checked = false; });
+    pathPoints = [];
+    updatePathVisual();
+    toast('Shot logged (' + normPath.length + ' points)');
+  };
 
   function updateCounter(){
     document.getElementById('mistake-count').textContent = data.current.mistakes.length;
@@ -468,7 +525,8 @@
     document.getElementById('game-no').value = nextNo;
     await save();
     updateCounter();
-    drawBoardFrame(liveBoard);
+    pathPoints = [];
+    updatePathVisual();
     toast('Match saved to report');
     renderReport();
   }
@@ -481,13 +539,42 @@
   }
   function cellCenter(idx){ return (idx + 0.5) / GRID; }
 
-  function typeLabel(key){
-    var t = MISTAKE_TYPES.filter(function(m){ return m.key===key; })[0];
+  function shotLabel(key){
+    var t = SHOT_TYPES.filter(function(m){ return m.key===key; })[0];
     return t ? t.label : key;
   }
-  function typeColor(key){
-    var t = MISTAKE_TYPES.filter(function(m){ return m.key===key; })[0];
+  function shotColor(key){
+    var t = SHOT_TYPES.filter(function(m){ return m.key===key; })[0];
     return t ? t.color : '#999';
+  }
+
+  function perpDist(A, B, P){
+    var dx = B.x-A.x, dy = B.y-A.y;
+    var len2 = dx*dx + dy*dy;
+    if(len2 === 0) return Math.hypot(P.x-A.x, P.y-A.y);
+    var t = ((P.x-A.x)*dx + (P.y-A.y)*dy) / len2;
+    var projX = A.x + t*dx, projY = A.y + t*dy;
+    return Math.hypot(P.x-projX, P.y-projY);
+  }
+
+  function drawGroupLabel(svg, x, y, count){
+    var labelBg = ns('circle');
+    labelBg.setAttribute('cx', x); labelBg.setAttribute('cy', y);
+    labelBg.setAttribute('r', 9);
+    labelBg.setAttribute('fill', 'var(--felt)');
+    labelBg.setAttribute('stroke', 'var(--queen)');
+    labelBg.setAttribute('stroke-width', '1');
+    svg.appendChild(labelBg);
+
+    var label = ns('text');
+    label.setAttribute('x', x); label.setAttribute('y', y+3.5);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('font-family', 'JetBrains Mono, monospace');
+    label.setAttribute('font-size', '10');
+    label.setAttribute('font-weight', '600');
+    label.setAttribute('fill', 'var(--queen-dark)');
+    label.textContent = count;
+    svg.appendChild(label);
   }
 
   function renderReport(){
@@ -495,18 +582,40 @@
     drawBoardFrame(svg);
 
     var groups = {};
-    var typeCounts = {};
-    MISTAKE_TYPES.forEach(function(t){ typeCounts[t.key] = 0; });
+    var comboCounts = {};
 
     data.history.forEach(function(game){
       game.mistakes.forEach(function(m){
-        var sx = cellIndex(m.start.x), sy = cellIndex(m.start.y);
-        var ex = cellIndex(m.end.x), ey = cellIndex(m.end.y);
-        var key = sx+','+sy+'-'+ex+','+ey;
-        if(!groups[key]) groups[key] = { sx:sx, sy:sy, ex:ex, ey:ey, count:0 };
+        var mType = m.type || 'straight';
+        var mReason = m.reason || 'angle_wrong';
+        var path = (m.path && m.path.length >= 2) ? m.path : [m.start, m.end];
+        var start = path[0], end = path[path.length-1];
+
+        // find the path point furthest from the straight start-end line — that's the bend/rebound point
+        var maxDist = 0, peak = null;
+        path.forEach(function(p){
+          var d = perpDist(start, end, p);
+          if(d > maxDist){ maxDist = d; peak = p; }
+        });
+        var isBent = maxDist > 0.06 && peak;
+
+        var sx = cellIndex(start.x), sy = cellIndex(start.y);
+        var ex = cellIndex(end.x), ey = cellIndex(end.y);
+        var key, groupData;
+        if(isBent){
+          var px = cellIndex(peak.x), py = cellIndex(peak.y);
+          key = 'B:' + sx+','+sy + '-' + px+','+py + '-' + ex+','+ey;
+          groupData = { bent:true, sx:sx, sy:sy, px:px, py:py, ex:ex, ey:ey };
+        } else {
+          key = 'S:' + sx+','+sy + '-' + ex+','+ey;
+          groupData = { bent:false, sx:sx, sy:sy, ex:ex, ey:ey };
+        }
+        if(!groups[key]){ groupData.count = 0; groups[key] = groupData; }
         groups[key].count++;
-        if(typeCounts[m.type] === undefined) typeCounts[m.type] = 0;
-        typeCounts[m.type]++;
+
+        var comboKey = mType + '|' + mReason;
+        if(!comboCounts[comboKey]) comboCounts[comboKey] = { type:mType, reason:mReason, count:0 };
+        comboCounts[comboKey].count++;
       });
     });
 
@@ -515,59 +624,79 @@
     if(keys.length === 0){
       reportHint.textContent = 'no finished games yet — play a match and hit "Match done"';
     } else {
-      reportHint.textContent = 'arrows = repeated mistake patterns across all games';
+      reportHint.textContent = 'arrows = repeated shot patterns · bent arrows = rebounds';
       var maxCount = Math.max.apply(null, keys.map(function(k){ return groups[k].count; }));
+
       keys.forEach(function(k){
         var g = groups[k];
-        var x1 = PAD + cellCenter(g.sx) * SIZE;
-        var y1 = PAD + cellCenter(g.sy) * SIZE;
-        var x2 = PAD + cellCenter(g.ex) * SIZE;
-        var y2 = PAD + cellCenter(g.ey) * SIZE;
-
-        var line = ns('line');
         var w = 1.5 + 3.5 * (g.count / maxCount);
-        line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-        line.setAttribute('stroke', 'var(--queen)');
-        line.setAttribute('stroke-width', w);
-        line.setAttribute('stroke-linecap', 'round');
-        line.setAttribute('opacity', 0.6 + 0.4*(g.count/maxCount));
-        line.setAttribute('marker-end', 'url(#arrowhead-report-board)');
-        svg.appendChild(line);
+        var opacity = 0.6 + 0.4*(g.count/maxCount);
 
-        var mx = x1 + (x2-x1)*0.7, my = y1 + (y2-y1)*0.7;
-        var labelBg = ns('circle');
-        labelBg.setAttribute('cx', mx); labelBg.setAttribute('cy', my);
-        labelBg.setAttribute('r', 9);
-        labelBg.setAttribute('fill', 'var(--felt)');
-        labelBg.setAttribute('stroke', 'var(--queen)');
-        labelBg.setAttribute('stroke-width', '1');
-        svg.appendChild(labelBg);
+        if(g.bent){
+          var sxp = PAD + cellCenter(g.sx)*SIZE, syp = PAD + cellCenter(g.sy)*SIZE;
+          var pxp = PAD + cellCenter(g.px)*SIZE, pyp = PAD + cellCenter(g.py)*SIZE;
+          var exp = PAD + cellCenter(g.ex)*SIZE, eyp = PAD + cellCenter(g.ey)*SIZE;
 
-        var label = ns('text');
-        label.setAttribute('x', mx); label.setAttribute('y', my+3.5);
-        label.setAttribute('text-anchor', 'middle');
-        label.setAttribute('font-family', 'JetBrains Mono, monospace');
-        label.setAttribute('font-size', '10');
-        label.setAttribute('font-weight', '600');
-        label.setAttribute('fill', 'var(--queen-dark)');
-        label.textContent = g.count;
-        svg.appendChild(label);
+          var seg1 = ns('line');
+          seg1.setAttribute('x1', sxp); seg1.setAttribute('y1', syp);
+          seg1.setAttribute('x2', pxp); seg1.setAttribute('y2', pyp);
+          seg1.setAttribute('stroke', 'var(--queen)');
+          seg1.setAttribute('stroke-width', w);
+          seg1.setAttribute('stroke-linecap', 'round');
+          seg1.setAttribute('opacity', opacity);
+          svg.appendChild(seg1);
+
+          var seg2 = ns('line');
+          seg2.setAttribute('x1', pxp); seg2.setAttribute('y1', pyp);
+          seg2.setAttribute('x2', exp); seg2.setAttribute('y2', eyp);
+          seg2.setAttribute('stroke', 'var(--queen)');
+          seg2.setAttribute('stroke-width', w);
+          seg2.setAttribute('stroke-linecap', 'round');
+          seg2.setAttribute('opacity', opacity);
+          seg2.setAttribute('marker-end', 'url(#arrowhead-report-board)');
+          svg.appendChild(seg2);
+
+          drawGroupLabel(svg, pxp, pyp, g.count);
+        } else {
+          var x1 = PAD + cellCenter(g.sx) * SIZE;
+          var y1 = PAD + cellCenter(g.sy) * SIZE;
+          var x2 = PAD + cellCenter(g.ex) * SIZE;
+          var y2 = PAD + cellCenter(g.ey) * SIZE;
+
+          var line = ns('line');
+          line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+          line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+          line.setAttribute('stroke', 'var(--queen)');
+          line.setAttribute('stroke-width', w);
+          line.setAttribute('stroke-linecap', 'round');
+          line.setAttribute('opacity', opacity);
+          line.setAttribute('marker-end', 'url(#arrowhead-report-board)');
+          svg.appendChild(line);
+
+          drawGroupLabel(svg, x1 + (x2-x1)*0.7, y1 + (y2-y1)*0.7, g.count);
+        }
       });
     }
 
-    renderTypeSummary(typeCounts);
+    renderTypeSummary(comboCounts);
   }
 
-  function renderTypeSummary(typeCounts){
+  function renderTypeSummary(comboCounts){
     var container = document.getElementById('type-summary');
-    var entries = Object.keys(typeCounts)
-      .map(function(k){ return { key:k, label:typeLabel(k), count:typeCounts[k], color:typeColor(k) }; })
+    var entries = Object.keys(comboCounts)
+      .map(function(k){
+        var c = comboCounts[k];
+        return {
+          label: shotLabel(c.type) + ' - ' + reasonGroupLabel(c.reason),
+          count: c.count,
+          color: shotColor(c.type)
+        };
+      })
       .filter(function(e){ return e.count > 0; })
       .sort(function(a,b){ return b.count - a.count; });
 
     if(entries.length === 0){
-      container.innerHTML = '<h3>Mistake types</h3><div class="empty-note">nothing logged yet</div>';
+      container.innerHTML = '<h3>Shot &amp; reason breakdown</h3><div class="empty-note">nothing logged yet</div>';
       return;
     }
 
@@ -581,16 +710,9 @@
       '</div>';
     }).join('');
 
-    var rows = entries.map(function(e){
-      return '<tr><td>' + e.label + '</td><td>' + e.count + '</td></tr>';
-    }).join('');
-
     container.innerHTML =
-      '<h3>Mistake types</h3>' +
-      bars +
-      '<table class="type-table"><thead><tr><th>Mistake type</th><th>Count</th></tr></thead><tbody>' +
-      rows +
-      '</tbody></table>';
+      '<h3>Shot &amp; reason breakdown</h3>' +
+      bars;
   }
 
   // ---------- tabs ----------
@@ -624,7 +746,8 @@
         await save();
         document.getElementById('game-no').value = data.current.gameNo || '';
         updateCounter();
-        drawBoardFrame(liveBoard);
+        pathPoints = [];
+        updatePathVisual();
         renderReport();
         toast('Data imported');
       }catch(err){
@@ -642,14 +765,15 @@
     await save();
     document.getElementById('game-no').value = '';
     updateCounter();
-    drawBoardFrame(liveBoard);
+    pathPoints = [];
+    updatePathVisual();
     renderReport();
     toast('All data cleared');
   };
 
   // ---------- init ----------
   (async function init(){
-    drawBoardFrame(liveBoard);
+    updatePathVisual();
     drawBoardFrame(document.getElementById('report-board'));
     await load();
     document.getElementById('game-no').value = data.current.gameNo || '';
