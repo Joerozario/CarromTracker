@@ -241,6 +241,10 @@
           <div class="num" id="acc-wrong" style="color:var(--queen-dark)">0</div>
           <div class="lbl">wrong</div>
         </div>
+        <div class="counter-card">
+          <div class="num" id="acc-strikes">1</div>
+          <div class="lbl">strike count</div>
+        </div>
       </div>
 
       <div class="acc-percent-card">
@@ -602,6 +606,7 @@
     var total = c + w;
     document.getElementById('acc-correct').textContent = c;
     document.getElementById('acc-wrong').textContent = w;
+    document.getElementById('acc-strikes').textContent = 1 + w;
     document.getElementById('acc-percent-current').textContent = total === 0 ? '—' : Math.round((c/total)*100) + '%';
     document.getElementById('undo-tap-btn').disabled = !lastTap;
 
